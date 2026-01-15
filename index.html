@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Joyful PT Prototype | US Stock Market Time Machine</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Poppins:wght@600;800&display=swap" rel="stylesheet">
+    
+    <script src="https://code.highcharts.com/stock/highstock.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/drag-panes.js"></script>
+    <script src="https://code.highcharts.com/stock/indicators/indicators-all.js"></script>
+
+    <style>
+        :root {
+            /* Joyful Theme Palette */
+            --bg-main: #f0f3f9;          /* 부드러운 배경색 */
+            --bg-panel: #ffffff;         /* 깨끗한 패널 배경 */
+            --text-primary: #2d3748;     /* 진한 텍스트 */
+            --text-secondary: #718096;   /* 연한 텍스트 */
+            
+            /* Brand & Action Colors (Gradients) */
+            --brand-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%); /* 활기찬 바이올렛 */
+            --up-gradient: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);    /* 시원한 상승 (블루/민트) */
+            --down-gradient: linear-gradient(to right, #ff758c 0%, #ff7eb3 100%);  /* 부드러운 하락 (코랄/핑크) */
+            
+            /* Chart Colors (Friendly Tone) */
+            --chart-up: #4fd1c5;         /* 민트 그린 */
+            --chart-down: #fc8181;       /* 소프트 레드 */
+            --chart-ma1: #f6ad55;        /* 오렌지 (이평선) */
+            --chart-ma2: #63b3ed;        /* 블루 (이평선) */
+        }
+
+        body { background: var(--bg-main); color: var(--text-primary); font-family: 'Poppins', 'Noto Sans KR', sans-serif; margin: 0; overflow: hidden; height: 100vh; }
+        
+        /* Top Nav: 밝고 경쾌하게 */
+        .top-nav {
+            height: 60px; background: var(--bg-panel); box-shadow: 0 2px 15px rgba(0,0,0,0.05);
+            display: flex; align-items: center; padding: 0 25px; justify-content: space-between; z-index: 10;
+        }
+        .logo-text { 
+            font-weight: 900; font-size: 1.4rem; 
+            background: var(--brand-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .btn-brand-outline { border: 2px solid #667eea; color: #667eea; font-weight: 700; border-radius: 50px; padding: 6px 18px; }
+
+        .main-layout { display: flex; height: calc(100vh - 60px); padding: 20px; gap: 20px; }
+        
+        /* Chart Section: 카드 형태로 깔끔하게 */
+        .chart-card { 
+            flex: 1; background: var(--bg-panel); border-radius: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.03);
+            padding: 20px; position: relative; display: flex; flex-direction: column;
+        }
+        .chart-header-badge {
+            position: absolute; top: 20px; left: 20px; z-index: 10;
+            background: rgba(102, 126, 234, 0.1); color: #667eea; font-weight: 700;
+            padding: 8px 16px; border-radius: 30px; display: flex; align-items: center; gap: 8px;
+        }
+        
+        /* Sidebar: 게임 UI처럼 친근하게 */
+        .sidebar-card { 
+            width: 320px; background: var(--bg-panel); border-radius: 20px; box-shadow: 0 5px 20px rgba(0,0,0,0.03);
+            padding: 25px; display: flex; flex-direction: column;
+        }
+        .asset-price { font-size: 2rem; font-weight: 900; color: var(--text-primary); }
+        .price-change.down { color: var(--chart-down); font-weight: 700; background: rgba(252, 129, 129, 0.1); padding: 4px 10px; border-radius: 20px; font-size: 0.9rem; }
+
+        .btn-trade { border: none; padding: 18px; border-radius: 16px; font-weight: 800; font-size: 1.2rem; color: white; margin-bottom: 12px; transition: 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .btn-trade:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
+
+        /* AI Guide: 팁 박스처럼 디자인 */
+        .ai-tip-box {
+            margin-top: auto; background: linear-gradient(135deg, #fff7e6 0%, #fff 100%);
+            border: 2px solid #ffe8b3; padding: 20px; border-radius: 16px; position: relative;
+        }
+        .ai-avatar { font-size: 2rem; position: absolute; top: -20px; right: 20px; background: #fff; padding: 5px; border-radius: 50%; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+<nav class="top-nav">
+    <div class="logo-text">STOCK TIME MACHINE <span style="font-weight: 500; font-size: 1rem; opacity: 0.8;">| Education Mode</span></div>
+    <div class="d-flex align-items-center gap-3">
+        <div class="bg-light px-3 py-2 rounded-pill fw-bold text-secondary">
+            🌱 모의 자산: <span style="color:#2d3748;">$ 10,000.00</span>
+        </div>
+        <a href="Capstone Desine Project PPT.pptx" class="btn btn-brand-outline text-decoration-none">📄 기획안(PPT)</a>
+    </div>
+</nav>
+
+<div class="main-layout">
+    <section class="chart-card">
+        <div class="chart-header-badge">
+            <span>🕒</span> 2008년 9월 14일 (일요일) | 리먼 사태 전야
+        </div>
+        <div id="chart-container" style="flex: 1; margin-top: 40px;"></div>
+        
+        <div class="mt-3 p-3 rounded-4" style="background: #f8faff; border-left: 5px solid #667eea;">
+            <h6 class="fw-bold text-primary mb-1">📰 당시 속보: "리먼 파산 임박, 월가 초긴장 상태"</h6>
+            <p class="small text-secondary mb-0">폭풍전야의 시장입니다. 차트의 거래량과 이평선 변화를 유심히 관찰해보세요!</p>
+        </div>
+    </section>
+
+    <aside class="sidebar-card">
+        <div class="mb-4 text-center">
+            <div class="text-secondary fw-bold mb-1">S&P 500 Index</div>
+            <div class="asset-price">1,214.50</div>
+            <div class="mt-2"><span class="price-change down">▼ 4.52% Today</span></div>
+        </div>
+
+        <button class="btn-trade w-100" style="background: var(--up-gradient);">🚀 상승 예측 (BUY)</button>
+        <button class="btn-trade w-100" style="background: var(--down-gradient);">🛡️ 하락 예측 (SELL)</button>
+
+        <div class="ai-tip-box mt-4">
+            <div class="ai-avatar">🤖</div>
+            <h6 class="fw-bold" style="color:#d97706;">AI 투자 코치</h6>
+            <p class="small text-secondary mb-0 fw-medium" style="line-height: 1.6;">
+                "잠깐! 현재 <strong>이동평균선</strong>이 하락 신호를 보내고 있어요. 무턱대고 매수하기보단 현금을 지키는 것도 훌륭한 투자 전략입니다!"
+            </p>
+        </div>
+    </aside>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ohlc = [
+            [1220227200000, 1280, 1290, 1270, 1285], [1220313600000, 1285, 1300, 1280, 1295],
+            [1220400000000, 1295, 1310, 1290, 1305], [1220486400000, 1305, 1320, 1300, 1315],
+            [1220572800000, 1315, 1310, 1280, 1285], [1220832000000, 1285, 1270, 1240, 1250],
+            [1220918400000, 1250, 1260, 1230, 1240], [1221004800000, 1240, 1255, 1220, 1230],
+            [1221091200000, 1230, 1245, 1210, 1220], [1221177600000, 1220, 1230, 1150, 1160]
+        ];
+        const volume = [
+            [1220227200000, 350000], [1220313600000, 420000], [1220400000000, 380000],
+            [1220486400000, 450000], [1220572800000, 520000], [1220832000000, 680000],
+            [1220918400000, 750000], [1221004800000, 820000], [1221091200000, 950000],
+            [1221177600000, 1200000]
+        ];
+
+        Highcharts.stockChart('chart-container', {
+            chart: { backgroundColor: 'transparent', style: { fontFamily: 'Poppins, sans-serif' } },
+            rangeSelector: { enabled: false }, navigator: { enabled: false }, scrollbar: { enabled: false },
+            credits: { enabled: false },
+
+            yAxis: [{
+                labels: { style: { color: '#718096' } }, title: { text: null },
+                height: '75%', lineWidth: 0, gridLineColor: '#e2e8f0'
+            }, {
+                labels: { style: { color: '#718096' } }, title: { text: null },
+                top: '80%', height: '20%', offset: 0, lineWidth: 0, gridLineColor: '#e2e8f0'
+            }],
+
+            plotOptions: {
+                candlestick: {
+                    color: '#fc8181', upColor: '#4fd1c5', // 부드러운 레드/민트
+                    lineColor: '#fc8181', upLineColor: '#4fd1c5'
+                }
+            },
+
+            series: [{
+                type: 'candlestick', name: 'S&P 500', id: 'main', data: ohlc
+            }, {
+                type: 'column', name: 'Volume', data: volume, yAxis: 1, color: '#cbd5e0'
+            }, {
+                type: 'sma', linkedTo: 'main', params: { period: 5 }, styles: { lineColor: '#f6ad55', lineWidth: 2 }
+            }, {
+                type: 'sma', linkedTo: 'main', params: { period: 20 }, styles: { lineColor: '#63b3ed', lineWidth: 2 }
+            }]
+        });
+    });
+</script>
+</body>
+</html>
