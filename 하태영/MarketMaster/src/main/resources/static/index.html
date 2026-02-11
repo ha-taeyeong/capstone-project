@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>Market Master Pro - K-Trading Terminal</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+  <style>
+    body { background-color: #0d1117; color: #c9d1d9; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; overflow: hidden; }
+    .header { background: #161b22; padding: 0 30px; display: flex; justify-content: space-between; border-bottom: 1px solid #30363d; height: 70px; align-items: center; }
+    .price-text { font-size: 26px; font-weight: bold; color: #f85149; }
+    .mission-badge { color: #ffa726; font-weight: bold; border: 1px solid #ffa726; padding: 6px 18px; border-radius: 20px; font-size: 13px; }
+    .mission-success { color: #3fb950 !important; border-color: #3fb950 !important; }
+    #chart-container { width: 100vw; height: calc(100vh - 150px); position: relative; }
+    .chart-legend { position: absolute; top: 20px; left: 20px; z-index: 10; background: rgba(22, 27, 34, 0.85); padding: 12px; border-radius: 8px; border: 1px solid #30363d; font-size: 12px; line-height: 1.6; pointer-events: none; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+    .footer { background: #161b22; height: 80px; display: flex; gap: 15px; justify-content: center; align-items: center; border-top: 1px solid #30363d; }
+    .btn { padding: 10px 20px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; color: white; transition: 0.2s; }
+    .buy { background: #f85149; } .sell { background: #0082fb; }
+    .qty-input-group { display: flex; align-items: center; gap: 8px; background: #0d1117; padding: 5px 15px; border-radius: 6px; border: 1px solid #30363d; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(13, 17, 23, 0.98); z-index: 4000; display: flex; align-items: center; justify-content: center; }
+    .t-card { max-width: 800px; width: 95%; padding: 40px; background: #161b22; border: 1px solid #30363d; border-radius: 16px; text-align: center; }
+    .t-vertical-container { display: flex; flex-direction: column; gap: 20px; align-items: center; }
+    .t-img-box { width: 100%; background: #0d1117; border-radius: 12px; border: 1px solid #30363d; padding: 15px; display: flex; justify-content: center; }
+    .t-img { max-width: 100%; max-height: 320px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+    .t-text-box { width: 100%; text-align: left; font-size: 16px; line-height: 1.6; color: #c9d1d9; border-top: 1px solid #30363d; padding-top: 15px; }
+    #toast-container { position: fixed; top: 85px; left: 50%; transform: translateX(-50%); z-index: 5000; display: flex; flex-direction: column; align-items: center; }
+  </style>
+</head>
+<body>
+
+<div id="tutorial-overlay" class="modal-overlay">
+  <div class="t-card">
+    <div id="t-content"></div>
+    <div style="display: flex; justify-content: space-between; margin-top: 30px;">
+      <button class="btn" style="background: #30363d" onclick="moveTutorial(-1)">이전</button>
+      <button class="btn buy" id="t-next" onclick="moveTutorial(1)">다음 단계</button>
+    </div>
+  </div>
+</div>
+
+<div id="review-modal" class="modal-overlay" style="display: none;">
+  <div class="modal-card" style="max-height: 80vh; overflow-y: auto;">
+    <h2 style="color: #f1e05a;">📊 매매 복기 리포트</h2>
+    <table style="width:100%; border-collapse: collapse; margin-top:20px;">
+      <thead style="background:#0d1117; color:#8b949e;">
+      <tr><th>시간</th><th>구분</th><th>체결가</th><th>수량</th><th>시그널</th></tr>
+      </thead>
+      <tbody id="review-list"></tbody>
+    </table>
+    <button class="btn" style="background: #30363d; margin-top: 20px;" onclick="toggleReview(false)">닫기</button>
+  </div>
+</div>
+
+<div class="header">
+  <div><span style="color: #8b949e;">LIVE:</span> <span id="price" class="price-text">0</span>원</div>
+  <div id="mission-status" class="mission-badge">🎯 미션: 총 자산 1,100만 원 달성</div>
+  <div style="font-size: 16px;">자산: <span id="cash" style="color: #f85149;">10,000,000</span>원 | 보유: <span id="qty" style="color: #ffa726;">0</span>주</div>
+</div>
+
+<div id="chart-container">
+  <div class="chart-legend">
+    <div><span class="dot" style="background:#f1e05a"></span><b style="color:#f1e05a">MA5</b>: <span id="ma5-val">-</span></div>
+    <div><span class="dot" style="background:#ff7b72"></span><b style="color:#ff7b72">MA20</b>: <span id="ma20-val">-</span></div>
+    <div><span class="dot" style="background:#3fb950"></span><b style="color:#3fb950">MA60</b>: <span id="ma60-val">-</span></div>
+    <div><span class="dot" style="background:#a371f7"></span><b style="color:#a371f7">MA120</b>: <span id="ma120-val">-</span></div>
+  </div>
+</div>
+<div id="toast-container"></div>
+
+<div class="footer">
+  <div class="qty-input-group">
+    <input type="number" id="trade-qty" value="10" min="1" style="width:50px; background:none; border:1px solid #30363d; color:white; padding:5px;">
+    <span style="color: #8b949e; font-size: 12px;">주</span>
+  </div>
+  <button class="btn buy" onclick="handleTrade('BUY')">실시간 매수</button>
+  <button class="btn sell" onclick="handleTrade('SELL')">실시간 매도</button>
+  <button class="btn" style="background: #30363d;" onclick="toggleReview(true)">📊 복기</button>
+  <button class="btn" style="background: #f1e05a; color: black;" onclick="handleInject('golden')">🚀 골든</button>
+  <button class="btn" style="background: #0082fb;" onclick="handleInject('dead')">💀 데드</button>
+  <button class="btn" style="background: #8b949e;" onclick="handleInject('reset')">🔄</button>
+</div>
+
+<script>
+  let tradeLogs = [];
+
+  function showToast(m, t) {
+    const c = document.getElementById('toast-container'), toast = document.createElement('div');
+    toast.innerText = m;
+    toast.style.cssText = `padding: 12px 25px; margin-bottom: 10px; border-radius: 8px; color: white; background: ${t==='success'?'#f85149':'#0082fb'}; box-shadow: 0 4px 15px rgba(0,0,0,0.3);`;
+    c.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+  }
+
+  window.handleInject = (type) => {
+    fetch(`/api/engine/trigger/${type}`, { method: 'POST' })
+            .then(res => { if (res.ok) showToast(`${type.toUpperCase()} 패턴 주입 완료`, 'success'); });
+  };
+
+  window.toggleReview = (show) => {
+    const modal = document.getElementById('review-modal');
+    modal.style.display = show ? 'flex' : 'none';
+    if (show) {
+      document.getElementById('review-list').innerHTML = tradeLogs.map(log => `
+        <tr><td>${new Date(log.time * 1000).toLocaleTimeString()}</td><td style="color:${log.type==='BUY'?'#f85149':'#0082fb'}; font-weight:bold;">${log.type==='BUY'?'매수':'매도'}</td><td>${log.price.toLocaleString()}원</td><td>${log.qty}주</td><td style="color:#ffa726;">${log.sig}</td></tr>`).join('');
+    }
+  };
+
+  // --- 가이드 데이터: 수식 문법 수정 (LaTeX) ---
+  const steps = [
+    { title: "1. 캔들과 심리의 기초", desc: "<b style='color:#f85149'>양봉(빨강)</b>은 상승을, <b style='color:#0082fb'>음봉(파랑)</b>은 하락을 뜻합니다.", imgTag: `<img src="/images/guide_candle.png" class="t-img">` },
+    { title: "2. 4중 이동평균선(MA) 읽기", desc: "5·20·60·120일 선을 통해 시장의 장단기 흐름을 한눈에 파악할 수 있습니다.", imgTag: `<img src="/images/guide_ma.png" class="t-img">` },
+    { title: "3. 골든/데드크로스 전략", desc: "이평선들이 교차하며 나타나는 시그널을 통해 매수와 매도 타이밍을 결정합니다.", imgTag: `<img src="/images/guide_cross.png" class="t-img">` },
+    {
+      title: "4. 금융공학 GBM 엔진",
+      // ⭐ 2. 그리스 문자(\mu, \sigma) 및 수식 기호 적용 ⭐
+      desc: "본 플랫폼은 실제 금융 수식인 \\( dS_t = \\mu S_t dt + \\sigma S_t dW_t \\) 모델(GBM)을 기반으로 실시간 시세를 생성합니다.",
+      imgTag: `<img src="/images/guide_gbm.png" class="t-img">`
+    }
+  ];
+
+  let tIdx = 0;
+  function moveTutorial(dir) {
+    tIdx += dir;
+    if (tIdx < 0) tIdx = 0;
+    if (tIdx >= steps.length) { document.getElementById('tutorial-overlay').style.display='none'; initApp(); return; }
+
+    const s = steps[tIdx];
+    document.getElementById('t-content').innerHTML = `
+      <h2 style="color:#f1e05a; margin-bottom:15px;">${s.title}</h2>
+      <div class="t-vertical-container">
+        <div class="t-img-box">${s.imgTag}</div>
+        <div class="t-text-box">${s.desc}</div>
+      </div>
+    `;
+    document.getElementById('t-next').innerText = tIdx === steps.length - 1 ? "게임 시작" : "다음 단계";
+
+    // ⭐ 3. 페이지 전환 시 MathJax에게 수식을 렌더링하라고 명령 ⭐
+    if (window.MathJax) {
+      MathJax.typesetPromise();
+    }
+  }
+  moveTutorial(0);
+
+  function initApp() {
+    const container = document.getElementById('chart-container');
+    const tvChart = LightweightCharts.createChart(container, { layout: { background: { color: '#0d1117' }, textColor: '#c9d1d9' }, grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } }, timeScale: { timeVisible: true, secondsVisible: true } });
+    const candleSeries = tvChart.addCandlestickSeries({ upColor: '#f85149', downColor: '#0082fb', borderVisible: false, wickUpColor: '#f85149', wickDownColor: '#0082fb' });
+    const maLines = { 5: tvChart.addLineSeries({ color: '#f1e05a', lineWidth: 1 }), 20: tvChart.addLineSeries({ color: '#ff7b72', lineWidth: 1 }), 60: tvChart.addLineSeries({ color: '#3fb950', lineWidth: 1 }), 120: tvChart.addLineSeries({ color: '#a371f7', lineWidth: 1 }) };
+    let priceHistory = [], markers = [], cash = 10000000, qty = 0, currentCandle = null, missionCleared = false;
+    const socket = new SockJS('/ws-market');
+    const stomp = Stomp.over(socket);
+    stomp.debug = null;
+    stomp.connect({}, () => {
+      stomp.subscribe('/topic/ticker', (tick) => {
+        const candle = JSON.parse(tick.body);
+        currentCandle = candle;
+        candleSeries.update(candle);
+        document.getElementById('price').innerText = candle.close.toLocaleString();
+        priceHistory.push(candle.close);
+        if (priceHistory.length > 150) priceHistory.shift();
+        [5, 20, 60, 120].forEach(p => { if (priceHistory.length >= p) { const avg = priceHistory.slice(-p).reduce((a, b) => a + b) / p; maLines[p].update({ time: candle.time, value: avg }); document.getElementById(`ma${p}-val`).innerText = Math.floor(avg).toLocaleString(); } });
+        const totalAsset = cash + (qty * candle.close);
+        if (!missionCleared && totalAsset >= 11000000) { missionCleared = true; document.getElementById('mission-status').classList.add('mission-success'); showToast("🎊 미션 성공!", "success"); }
+      });
+    });
+    window.handleTrade = (type) => {
+      const tQty = parseInt(document.getElementById('trade-qty').value);
+      const price = currentCandle.close;
+      const ma5 = priceHistory.slice(-5).reduce((a,b)=>a+b)/5;
+      const ma20 = priceHistory.slice(-20).reduce((a,b)=>a+b)/20;
+      let sig = (ma5 > ma20 * 1.001) ? "골든" : (ma5 < ma20 * 0.999) ? "데드" : "일반";
+      if (type === 'BUY' && cash >= price * tQty) { cash -= price * tQty; qty += tQty; tradeLogs.push({ time: currentCandle.time, type: 'BUY', price, qty: tQty, sig }); addMarker(currentCandle.time, 'buy', `매수 ${tQty}주 (${sig})`); }
+      else if (type === 'SELL' && qty >= tQty) { cash += price * tQty; qty -= tQty; tradeLogs.push({ time: currentCandle.time, type: 'SELL', price, qty: tQty, sig }); addMarker(currentCandle.time, 'sell', `매도 ${tQty}주 (${sig})`); }
+      document.getElementById('cash').innerText = cash.toLocaleString();
+      document.getElementById('qty').innerText = qty.toLocaleString();
+    };
+    function addMarker(time, type, label) { markers.push({ time, position: type === 'buy' ? 'belowBar' : 'aboveBar', color: type === 'buy' ? '#f85149' : '#0082fb', shape: type === 'buy' ? 'arrowUp' : 'arrowDown', text: label }); candleSeries.setMarkers(markers); }
+  }
+</script>
+</body>
+</html>
